@@ -7,21 +7,29 @@ on:
 jobs:
   build-and-deploy:
     runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
 
       - name: Create env for build
-        run: printf "%s" "${{ secrets.REACT_ENV }}" > .env.production
+        run: |
+          printf "%s" "${{ secrets.REACT_ENV }}" > .env.production
 
-      - run: npm ci
-      - run: npm run build
+      - name: Install deps
+        run: npm ci
 
-      - uses: appleboy/scp-action@v0.1.7
+      - name: Build
+        run: npm run build
+
+      - name: Upload build to VPS
+        uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
@@ -29,15 +37,17 @@ jobs:
           source: "dist/*"
           target: "/tmp/react_build"
 
-      - uses: appleboy/ssh-action@v1.0.3
+      - name: Activate build on VPS
+        uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.VPS_HOST }}
           username: ${{ secrets.VPS_USER }}
           key: ${{ secrets.VPS_KEY }}
           script: |
             set -e
-            rm -rf /var/www/skyops-react/*
-            cp -r /tmp/react_build/dist/* /var/www/skyops-react/
-            chown -R www-data:www-data /var/www/skyops-react
-            nginx -t
-            systemctl reload nginx
+            sudo mkdir -p /var/www/react-app
+            sudo rm -rf /var/www/react-app/*
+            sudo cp -r /tmp/react_build/dist/* /var/www/react-app/
+            sudo chown -R www-data:www-data /var/www/react-app
+            sudo nginx -t
+            sudo systemctl reload nginx
